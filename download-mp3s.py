@@ -1,32 +1,27 @@
 import csv
-from googleapiclient.discovery import build
-from urllib.parse import quote
+import requests
+from bs4 import BeautifulSoup
 
-def search_song_on_youtube(song_name, api_key):
-    # Set up the YouTube Data API
-    youtube = build('youtube', 'v3', developerKey=api_key)
+def search_song_on_youtube(song_name):
+    # Construct the YouTube search URL
+    search_url = f"https://www.youtube.com/results?search_query={song_name}"
     
-    # Construct the search query
-    search_query = quote(song_name)
+    # Send a GET request to the search URL
+    response = requests.get(search_url)
     
-    # Make the API request to search for videos
-    request = youtube.search().list(
-        q=search_query,
-        part='snippet',
-        type='video',
-        maxResults=1
-    )
-    response = request.execute()
+    # Parse the HTML content of the response
+    soup = BeautifulSoup(response.text, 'html.parser')
     
-    # Extract the video URL from the response
-    if 'items' in response and response['items']:
-        video_id = response['items'][0]['id']['videoId']
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
+    # Find the first video link in the search results
+    video_link = soup.find('a', {'class': 'yt-uix-tile-link'})
+    
+    if video_link:
+        video_url = 'https://www.youtube.com' + video_link['href']
         return video_url
     else:
         return None
 
-def find_youtube_urls(csv_file, api_key):
+def find_youtube_urls(csv_file):
     youtube_urls = []
 
     with open(csv_file, 'r', newline='', encoding='utf-8') as file:
@@ -34,7 +29,7 @@ def find_youtube_urls(csv_file, api_key):
         next(reader)  # Skip header row if present
         for row in reader:
             song_name = row[0]
-            video_url = search_song_on_youtube(song_name, api_key)
+            video_url = search_song_on_youtube(song_name)
             if video_url:
                 youtube_urls.append([song_name, video_url])
             else:
@@ -42,15 +37,16 @@ def find_youtube_urls(csv_file, api_key):
 
     return youtube_urls
 
-def write_to_csv(youtube_urls, output_csv):
-    with open(output_csv, 'w', newline='', encoding='utf-8') as file:
+def save_youtube_urls(youtube_urls, output_file):
+    with open(output_file, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         writer.writerow(['Song Name', 'YouTube URL'])
         writer.writerows(youtube_urls)
 
 if __name__ == "__main__":
-    csv_file = 'songs.csv'  # Path to your CSV file containing song names
-    output_csv = 'youtube_urls.csv'  # Path to the output CSV file
-    api_key = 'AIzaSyAvZn1GKg6f5jjnfWfhCnGCJFa2mD4xluE'  # Replace 'YOUR_API_KEY' with your actual YouTube Data API key
-    youtube_urls = find_youtube_urls(csv_file, api_key)
-    write_to_csv(youtube_urls, output_csv)
+    csv_file = 'songs.csv'
+    api_key = 'YOUR_YOUTUBE_API_KEY'  # Replace with your actual API key
+    output_file = 'youtube_urls.csv'
+
+    youtube_urls = find_youtube_urls(csv_file)
+    save_youtube_urls(youtube_urls, output_file)
