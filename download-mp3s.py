@@ -1,72 +1,56 @@
-from bs4 import BeautifulSoup
-import requests
-from pathlib import Path
-import youtube_dl
-import pandas as pd
-import os
+import csv
+from googleapiclient.discovery import build
+from urllib.parse import quote
 
-def download_videos_from_titles(los):
-    ids = []
-    for index, item in enumerate(los):
-        vid_id = scrape_vid_id(item)
-        if vid_id:
-            ids.append(vid_id)
-    if ids:
-        print("Downloading songs")
-        download_videos_from_ids(ids)
+def search_song_on_youtube(song_name, api_key):
+    # Set up the YouTube Data API
+    youtube = build('youtube', 'v3', developerKey=api_key)
+    
+    # Construct the search query
+    search_query = quote(song_name)
+    
+    # Make the API request to search for videos
+    request = youtube.search().list(
+        q=search_query,
+        part='snippet',
+        type='video',
+        maxResults=1
+    )
+    response = request.execute()
+    
+    # Extract the video URL from the response
+    if 'items' in response and response['items']:
+        video_id = response['items'][0]['id']['videoId']
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        return video_url
     else:
-        print("No valid video IDs found. Exiting.")
+        return None
 
-def download_videos_from_ids(lov):
-    save_path = str(Path.home() / "Downloads/songs")
-    try:
-        os.makedirs(save_path, exist_ok=True)
-    except OSError as e:
-        print("Error creating download folder:", e)
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'outtmpl': save_path + '/%(title)s.%(ext)s',
-    }
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        try:
-            ydl.download(lov)
-        except youtube_dl.utils.DownloadError as e:
-            print("Download error:", e)
+def find_youtube_urls(csv_file, api_key):
+    youtube_urls = []
 
-def scrape_vid_id(query):
-    print("Getting video id for:", query)
-    basic = "http://www.youtube.com/results?search_query="
-    url = basic + query.replace(" ", "+")
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
+    with open(csv_file, 'r', newline='', encoding='utf-8') as file:
+        reader = csv.reader(file)
+        next(reader)  # Skip header row if present
+        for row in reader:
+            song_name = row[0]
+            video_url = search_song_on_youtube(song_name, api_key)
+            if video_url:
+                youtube_urls.append([song_name, video_url])
+            else:
+                print(f"Song '{song_name}' not found on YouTube.")
 
-    results = soup.find_all('a', class_="yt-simple-endpoint style-scope ytd-video-renderer")
-    if results:
-        return results[0]['href'].split('/watch?v=')[1]
-    else:
-        print("Video not found for query:", query)
-        return ''  # Return an empty string instead of None
+    return youtube_urls
 
-
-def main():
-    try:
-        data = pd.read_csv('songs.csv')
-        column_name = 'song names'  # Change this to the correct column name
-        if column_name in data.columns:
-            songs = data[column_name].tolist()
-            print("Found", len(songs), "songs!")
-            download_videos_from_titles(songs[0:1])
-        else:
-            print("Column", column_name, "not found in the CSV file.")
-    except FileNotFoundError:
-        print("Error: File 'songs.csv' not found.")
-    except Exception as e:
-        print("An error occurred:", e)
+def write_to_csv(youtube_urls, output_csv):
+    with open(output_csv, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Song Name', 'YouTube URL'])
+        writer.writerows(youtube_urls)
 
 if __name__ == "__main__":
-    main()
+    csv_file = 'songs.csv'  # Path to your CSV file containing song names
+    output_csv = 'youtube_urls.csv'  # Path to the output CSV file
+    api_key = 'AIzaSyAvZn1GKg6f5jjnfWfhCnGCJFa2mD4xluE'  # Replace 'YOUR_API_KEY' with your actual YouTube Data API key
+    youtube_urls = find_youtube_urls(csv_file, api_key)
+    write_to_csv(youtube_urls, output_csv)
