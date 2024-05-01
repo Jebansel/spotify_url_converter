@@ -8,7 +8,7 @@ import time
 # App config
 app = Flask(__name__)
 
-app.secret_key = 'fgsdfgarsdk'
+app.secret_key = 'SECRET_KEY'
 app.config['SESSION_COOKIE_NAME'] = 'spotify-login-session'
 
 @app.route('/')
@@ -80,8 +80,8 @@ def get_token():
 
 def create_spotify_oauth():
     return SpotifyOAuth(
-        client_id="f8d23fae02c54efc8cdd63eff3f44da4",
-        client_secret="ea7f811e3a28423da5b315fe5284dd29",
+        client_id="CLIENT_ID",
+        client_secret="CLIENT_SECRET",
         redirect_uri=url_for('authorizePage', _external=True ),
         scope="user-library-read"
     )
